@@ -20,7 +20,7 @@ Only salary is required. Defaults: `NotMarried`, `0` dependents, `2025`.
 node cli.js 1500
 # Gross: 1500€ | Net: 1148.9€ | IRS: 186.1€ | SS: 165€
 
-node cli.js 2000 MarriedOneTitular 1 2025
+node cli.js 2000 MarriedOneHolder 1 2025
 # Gross: 2000€ | Net: 1637.69€ | IRS: 142.31€ | SS: 220€
 ```
 
@@ -38,24 +38,34 @@ Calculates the full salary breakdown for a given gross salary.
 const result = calculateSalary({
   situation: 'NotMarried',
   numDependents: 0,
-  year: '2025',
+  year: '2026',
   salary: 1500
 });
 
 console.log(result);
-// { grossSalary: 1500, netSalary: 1148.9, ssDiscount: 165, irsDiscount: 186.1 }
+/*
+  { 
+    grossSalary: 1500, 
+    netSalary: 1166.8, 
+    ssDiscount: 168.17, 
+    irsDiscount: 165, 
+    companyMonthlyCost: 2165.63, 
+    companyAnnualCost 25987.5
+  }
+*/
 ```
+
 
 **Parameters:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `situation` | string | `'NotMarried'`, `'MarriedOneTitular'`, or `'MarriedTwoTitulares'` |
+| `situation` | string | `'NotMarried'`, `'MarriedOneHolder'`, or `'MarriedTwoHolders'` |
 | `numDependents` | number | Number of dependents (0-5+) |
 | `year` | string | Tax year: `'2026'`, `'2025'`, `'2024_03'`, `'2024_02'`, `'2024'`, or `'2023'` |
 | `salary` | number | Gross monthly salary in euros |
 
-**Returns:** `{ grossSalary, netSalary, ssDiscount, irsDiscount }`
+**Returns:** `{ grossSalary, netSalary, ssDiscount, irsDiscount, companyMonthlyCost, companyAnnualCost }`
 
 ## Test
 

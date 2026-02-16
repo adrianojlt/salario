@@ -32,16 +32,16 @@ describe('calculateSalary', () => {
     });
   });
 
-  describe('MarriedOneTitular with dependents, 2025', () => {
+  describe('MarriedOneHolder with dependents, 2025', () => {
     it('2 dependents, salary 2000', () => {
-      const result = calculateSalary({ situation: 'MarriedOneTitular', numDependents: 2, year: '2025', salary: 2000 });
+      const result = calculateSalary({ situation: 'MarriedOneHolder', numDependents: 2, year: '2025', salary: 2000 });
       assert.equal(result.netSalary, 1680.55);
     });
   });
 
-  describe('MarriedTwoTitulares, 2025', () => {
+  describe('MarriedTwoHolders, 2025', () => {
     it('0 dependents, salary 2000', () => {
-      const result = calculateSalary({ situation: 'MarriedTwoTitulares', numDependents: 0, year: '2025', salary: 2000 });
+      const result = calculateSalary({ situation: 'MarriedTwoHolders', numDependents: 0, year: '2025', salary: 2000 });
       assert.equal(result.netSalary, 1453.99);
     });
   });

@@ -1,15 +1,15 @@
 const Situation = {
   NotMarried: '0',
-  MarriedOneTitular: '1',
-  MarriedTwoTitulares: '2'
+  MarriedOneHolder: '1',
+  MarriedTwoHolders: '2'
 };
 
 const TSU = "1.2375";
 
 const SITUATION_MAP = {
   'NotMarried': '0',
-  'MarriedOneTitular': '1',
-  'MarriedTwoTitulares': '2'
+  'MarriedOneHolder': '1',
+  'MarriedTwoHolders': '2'
 };
 
 function getType(situation, dependents, year) {
@@ -18,11 +18,11 @@ function getType(situation, dependents, year) {
       if (dependents === 0) return "SOLCAS2";
       return "SOLD";
     }
-    if (situation === Situation.MarriedOneTitular) {
+    if (situation === Situation.MarriedOneHolder) {
       if (dependents === 0) return "CAS1";
       return "CAS1D";
     }
-    if (situation === Situation.MarriedTwoTitulares) {
+    if (situation === Situation.MarriedTwoHolders) {
       if (dependents === 0) return "SOLCAS2";
       return "CAS2D";
     }
@@ -33,10 +33,10 @@ function getType(situation, dependents, year) {
       if (dependents === 0) return "SOLCAS2";
       return "SOLD";
     }
-    if (situation === Situation.MarriedOneTitular) {
+    if (situation === Situation.MarriedOneHolder) {
       return "CAS1";
     }
-    if (situation === Situation.MarriedTwoTitulares) {
+    if (situation === Situation.MarriedTwoHolders) {
       return "SOLCAS2";
     }
   }
