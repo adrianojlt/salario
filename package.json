@@ -1,0 +1,12 @@
+{
+  "name": "salario",
+  "version": "1.0.0",
+  "description": "Portuguese salary calculator - calculates net salary from gross",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test.js"
+  },
+  "dependencies": {
+    "papaparse": "^5.4.1"
+  }
+}
