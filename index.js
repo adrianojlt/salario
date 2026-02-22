@@ -1,7 +1,7 @@
 const { loadTables } = require('./src/tables');
 const { calculate } = require('./src/calculate');
 
-function calculateSalary({ situation, numDependents, year, salary }) {
+function calculateSalary({ situation = 'NotMarried', numDependents = 0, year = '2026', salary }) {
 
   const csvJsons = loadTables();
   const csvJson = csvJsons[year];

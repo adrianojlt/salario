@@ -1,10 +1,27 @@
 {
-  "name": "salario",
-  "version": "1.0.0",
+  "name": "salario-pt",
+  "version": "1.0.1",
   "description": "Portuguese salary calculator - calculates net salary from gross",
   "main": "index.js",
+  "bin": {
+    "salario-pt": "./cli.js"
+  },
   "scripts": {
     "test": "node --test test.js"
+  },
+  "keywords": [
+    "salary",
+    "portugal",
+    "irs",
+    "tax",
+    "calculator",
+    "net-salary"
+  ],
+  "author": "Adriano <adrianojlt@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adrianojlt/salario.git"
   },
   "dependencies": {
     "papaparse": "^5.4.1"

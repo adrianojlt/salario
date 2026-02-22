@@ -19,9 +19,13 @@ Only salary is required. Defaults: `NotMarried`, `0` dependents, `2025`.
 ```bash
 node cli.js 1500
 # Gross: 1500€ | Net: 1148.9€ | IRS: 186.1€ | SS: 165€
+# Company Monthly Cost: 2165.63€
+# Company Annual Cost: 25987.5€
 
-node cli.js 2000 MarriedOneHolder 1 2025
+node cli.js 2000 MarriedOneHolder 1 2026
 # Gross: 2000€ | Net: 1637.69€ | IRS: 142.31€ | SS: 220€
+# Company Monthly Cost: 2887.5€
+# Company Annual Cost: 34650€
 ```
 
 ## Programmatic Usage
