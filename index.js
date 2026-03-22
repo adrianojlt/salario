@@ -1,16 +1,19 @@
-const { loadTables } = require('./src/tables');
+const { loadTables, LOCATIONS } = require('./src/tables');
 const { calculate } = require('./src/calculate');
 
-function calculateSalary({ situation = 'NotMarried', numDependents = 0, year = '2026', salary }) {
+function calculateSalary({ situation = 'NotMarried', numDependents = 0, year = '2026', salary, location = 'continente' }) {
 
-  const csvJsons = loadTables();
-  const csvJson = csvJsons[year];
-
-  if (!csvJson) {
-    throw new Error(`Unknown year: ${year}. Available: ${Object.keys(csvJsons).join(', ')}`);
+  if (!LOCATIONS.includes(location)) {
+    throw new Error(`Unknown location: ${location}. Available: ${LOCATIONS.join(', ')}`);
   }
 
-  const result = calculate(salary, situation, numDependents, year, csvJson);
+  const csvJson = loadTables(location, year);
+
+  if (!csvJson) {
+    throw new Error(`No data for ${location} in year ${year}`);
+  }
+
+  const result = calculate(salary, situation, numDependents, year, csvJson, location);
 
   if (result === null) {
     throw new Error(`Could not calculate salary for the given parameters`);

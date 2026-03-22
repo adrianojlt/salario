@@ -42,14 +42,21 @@ function getType(situation, dependents, year) {
   }
 }
 
-function calculate(grossSalary, situation, numDependents, year, csvJson) {
+function calculate(grossSalary, situation, numDependents, year, csvJson, location) {
 
   const internalSituation = SITUATION_MAP[situation] || situation;
 
-  const type = getType(internalSituation, numDependents, year);
+  let type = getType(internalSituation, numDependents, year);
 
   const inMaxRange = (x) => grossSalary < parseFloat(x.limite.replace(',', '.')) && x.sinal === 'max';
   const inMinRange = (x) => grossSalary >= parseFloat(x.limite.replace(',', '.')) && x.sinal === 'min';
+
+  const hasType = (t) => csvJson.some(x => x.tipo === t);
+
+  if (!hasType(type)) {
+    if (type === 'SOLCAS2') type = 'SOLD';
+    else if (type === 'CAS2D') type = 'CAS1';
+  }
 
   const values = csvJson.filter(x => x.tipo === type && (inMaxRange(x) || inMinRange(x)));
 

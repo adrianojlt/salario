@@ -76,8 +76,42 @@ describe('calculateSalary', () => {
     it('throws on invalid year', () => {
       assert.throws(
         () => calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '1999', salary: 2000 }),
-        { message: /Unknown year: 1999/ }
+        { message: /No data for continente in year 1999/ }
       );
+    });
+
+    it('throws on invalid location', () => {
+      assert.throws(
+        () => calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2026', salary: 2000, location: 'lisboa' }),
+        { message: /Unknown location: lisboa/ }
+      );
+    });
+
+    it('throws on madeira with unsupported year', () => {
+      assert.throws(
+        () => calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2025', salary: 2000, location: 'madeira' }),
+        { message: /No data for madeira in year 2025/ }
+      );
+    });
+  });
+
+  describe('different locations', () => {
+    it('acores, NotMarried, salary 2000', () => {
+      const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2026', salary: 2000, location: 'acores' });
+      assert.ok(result.netSalary > 0);
+      assert.ok(result.netSalary < 2000);
+    });
+
+    it('madeira, NotMarried, salary 2000', () => {
+      const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2026', salary: 2000, location: 'madeira' });
+      assert.ok(result.netSalary > 0);
+      assert.ok(result.netSalary < 2000);
+    });
+
+    it('acores and continente give different results', () => {
+      const acores = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2026', salary: 2000, location: 'acores' });
+      const continente = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2026', salary: 2000, location: 'continente' });
+      assert.notEqual(acores.irsDiscount, continente.irsDiscount);
     });
   });
 });
