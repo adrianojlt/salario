@@ -1,6 +1,6 @@
 {
   "name": "salario-pt",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "Portuguese salary calculator - calculates net salary from gross",
   "main": "index.js",
   "bin": {
