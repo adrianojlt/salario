@@ -90,11 +90,11 @@ const result = calculateSalary({
 | `salary` | number | required | Gross monthly salary in euros |
 | `situation` | string | `'NotMarried'` | `'NotMarried'`, `'MarriedOneHolder'`, or `'MarriedTwoHolders'` |
 | `numDependents` | number | `0` | Number of dependents |
-| `year` | string | `'2026'` | Tax year: `'2026'`, `'2025'`, `'2024_03'`, `'2024_02'`, `'2024'`, `'2023'` |
+| `year` | string | `'2026'` | Tax year: `'2026'`, `'2025'`, `'2024_03'`, `'2024_02'`, `'2024'`, `'2023'` (see `YEARS`) |
 | `location` | string | `'continente'` | `'continente'`, `'madeira'`, or `'acores'` |
-| `mealAllowance` | object | — | See below |
-| `irsJovem` | object | — | See below |
-| `subsidies` | object | — | See below |
+| `mealAllowance` | object | - | See below |
+| `irsJovem` | object | - | See below |
+| `subsidies` | object | - | See below |
 
 **mealAllowance:**
 
@@ -162,7 +162,7 @@ calculateSalary({ salary: 2000, year: '2025', mealAllowance: { dailyAmount: 7.63
 
 // Subsidies with annual breakdown
 calculateSalary({ salary: 2000, year: '2025', subsidies: { duodecimos: false } });
-// annual: { grossTotal: 28000, netTotal: 20701.24, irsTotal: 4218.76, ssTotal: 3080 }
+// annual: { grossTotal: 28000, netTotal: 20355.86, irsTotal: 4564.14, ssTotal: 3080 }
 ```
 
 ### calculateSalaryFromNet(options)
@@ -215,7 +215,9 @@ Adding a table:
 3. Bump the version in `package.json`
 4. `npm run manifest` (fills `sha256` and `version`)
 5. `npm test`
-6. `npm publish` (runs `npm run manifest:check` and `npm test` first)
+6. Commit, tag and publish (see [Releasing](#releasing))
+
+CSV files in `data/` are always checked out with LF line endings (`.gitattributes`), so the `sha256` values are the same on every OS.
 
 ## Test
 
@@ -223,9 +225,59 @@ Adding a table:
 npm test
 ```
 
+## Releasing
+
+### 1. Log in to npm (once per machine)
+
+```bash
+npm whoami     # prints your username if logged in
+npm login      # if whoami fails with ENEEDAUTH; completes in the browser
+```
+
+### 2. Prepare the release
+
+```bash
+# bump "version" in package.json (patch: fixes, minor: new tables/features, major: breaking changes)
+npm run manifest        # sync manifest version and sha256
+npm test
+git add -A
+git commit -m "feat: ..."
+```
+
+### 3. Tag the release
+
+Every published version has a git tag `v<version>` on the commit it was published from.
+
+```bash
+git tag v1.4.0                # tag the current commit
+git tag v1.2.0 <commit-sha>   # tag an older commit (if a tag was forgotten)
+git tag                       # list tags
+git tag -d v1.4.0             # delete a local tag created by mistake
+```
+
+### 4. Push and publish
+
+```bash
+git push
+git push --tags
+npm publish                   # runs manifest:check and npm test first; aborts if they fail
+npm publish --otp=123456      # if npm asks for a 2FA code
+```
+
+### 5. Verify
+
+```bash
+npm view salario-pt version   # should print the new version
+```
+
+The files are also served by jsDelivr (may take a few minutes to appear):
+`https://cdn.jsdelivr.net/npm/salario-pt@<version>/data/manifest.json`
+
+A published version cannot be republished. If something is wrong, fix it and release a new version.
+
 ## How it works
 
-1. Loads CSV tax tables from `data/` (parsed with papaparse, cached after first load)
+1. Loads the CSV tax tables listed in `data/manifest.json` (parsed with papaparse, cached after first load)
 2. Determines the tax type based on situation, dependents, and year
 3. Finds the matching tax bracket for the gross salary
 4. Calculates:
