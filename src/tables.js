@@ -4,9 +4,6 @@ const Papa = require('papaparse');
 
 let cachedTables = null;
 
-const LOCATIONS = ['continente', 'madeira', 'acores'];
-const YEARS = ['2026', '2025', '2024_03', '2024_02', '2024', '2023'];
-
 function getDataPath() {
   const packageRoot = path.join(__dirname, '..');
   const dataPath = path.join(packageRoot, 'data');
@@ -15,6 +12,11 @@ function getDataPath() {
   }
   return path.join(__dirname, '..', '..', '..', 'data');
 }
+
+const manifest = JSON.parse(fs.readFileSync(path.join(getDataPath(), 'manifest.json'), 'utf-8'));
+const TABLES = manifest.tables;
+const LOCATIONS = [...new Set(TABLES.map((table) => table.location))];
+const YEARS = [...new Set(TABLES.map((table) => table.year))];
 
 function loadTables(location, year) {
   if (!cachedTables) {
@@ -26,13 +28,12 @@ function loadTables(location, year) {
     return cachedTables[key];
   }
 
-  const dataPath = getDataPath();
-  const filePath = path.join(dataPath, `taxas_${location}_${year}.csv`);
-
-  if (!fs.existsSync(filePath)) {
+  const table = TABLES.find((entry) => entry.location === location && entry.year === year);
+  if (!table) {
     return null;
   }
 
+  const filePath = path.join(getDataPath(), table.file);
   const csv = fs.readFileSync(filePath, 'utf-8');
   const results = Papa.parse(csv, { header: true, delimiter: ';' });
   cachedTables[key] = results.data;
@@ -40,4 +41,4 @@ function loadTables(location, year) {
   return cachedTables[key];
 }
 
-module.exports = { loadTables, LOCATIONS, YEARS };
+module.exports = { loadTables, LOCATIONS, YEARS, TABLES };

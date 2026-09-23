@@ -5,3 +5,4 @@ temp/
 .DS_Store
 *.tgz
 test.js
+data/*_catH.csv

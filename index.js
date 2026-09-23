@@ -1,4 +1,4 @@
-const { loadTables, LOCATIONS } = require('./src/tables');
+const { loadTables, LOCATIONS, YEARS, TABLES } = require('./src/tables');
 const { calculate } = require('./src/calculate');
 
 function calculateSalary({ situation = 'NotMarried', numDependents = 0, year = '2026', salary, location = 'continente', mealAllowance, irsJovem, subsidies }) {
@@ -76,4 +76,4 @@ function calculateSalaryFromNet({ netSalary: targetNet, situation = 'NotMarried'
   return calculateSalary({ ...opts, salary: parseFloat(((low + high) / 2).toFixed(2)) });
 }
 
-module.exports = { calculateSalary, calculateSalaryFromNet };
+module.exports = { calculateSalary, calculateSalaryFromNet, LOCATIONS, YEARS, TABLES };

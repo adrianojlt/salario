@@ -183,6 +183,40 @@ const result = calculateSalaryFromNet({
 
 The function uses binary search and converges to within 0.01€ precision.
 
+## Tabelas disponíveis
+
+`data/manifest.json` is the single source of the IRS tables shipped with the package. Each entry in `tables` has:
+
+| Field | Description |
+|-------|-------------|
+| `location` | `continente`, `madeira` or `acores` |
+| `year` | Table id used in `year` option (e.g. `2026`, `2024_03`) |
+| `label` | Human-readable label (e.g. `2024 11-12`) |
+| `validFrom` | Date the table takes effect (`YYYY-MM-DD`) |
+| `file` | CSV file name in `data/` |
+| `sha256` | SHA-256 of the CSV file (generated) |
+
+The manifest also has `schemaVersion` and `version` (same as the package version, generated).
+
+The available tables are exported:
+
+```js
+const { LOCATIONS, YEARS, TABLES } = require('salario-pt');
+
+LOCATIONS; // ['continente', 'madeira', 'acores']
+YEARS;     // ['2026', '2025', '2024_03', '2024_02', '2024', '2023']
+TABLES.filter((t) => t.location === 'madeira').map((t) => t.label); // ['2026']
+```
+
+Adding a table:
+
+1. Add the new `taxas_<location>_<year>.csv` to `data/`
+2. Add an entry to `data/manifest.json` (`location`, `year`, `label`, `validFrom`, `file`)
+3. Bump the version in `package.json`
+4. `npm run manifest` (fills `sha256` and `version`)
+5. `npm test`
+6. `npm publish` (runs `npm run manifest:check` and `npm test` first)
+
 ## Test
 
 ```bash

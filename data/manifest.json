@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "version": "1.3.0",
+  "tables": [
+    {
+      "location": "continente",
+      "year": "2026",
+      "label": "2026",
+      "validFrom": "2026-01-01",
+      "file": "taxas_continente_2026.csv",
+      "sha256": "10b24d5374a544c59a5f28cb8dbea32075528ab18ca13fdf2d2fe0b6942fd4d1"
+    },
+    {
+      "location": "continente",
+      "year": "2025",
+      "label": "2025",
+      "validFrom": "2025-01-01",
+      "file": "taxas_continente_2025.csv",
+      "sha256": "907c2ee86c0961cff0730bc4fd7a477b67badba5a701071d9b28dd78a617e6d6"
+    },
+    {
+      "location": "continente",
+      "year": "2024_03",
+      "label": "2024 11-12",
+      "validFrom": "2024-11-01",
+      "file": "taxas_continente_2024_03.csv",
+      "sha256": "81f2ffb91e04f42d5e32b9abe79c8f2cc326fb249247eee54374c7a6c8f9f3b9"
+    },
+    {
+      "location": "continente",
+      "year": "2024_02",
+      "label": "2024 09-10",
+      "validFrom": "2024-09-01",
+      "file": "taxas_continente_2024_02.csv",
+      "sha256": "8a9733f2349cfddca0ae20a6f99fc8ee195b67bb6558695d13ab7190232d5778"
+    },
+    {
+      "location": "continente",
+      "year": "2024",
+      "label": "2024",
+      "validFrom": "2024-01-01",
+      "file": "taxas_continente_2024.csv",
+      "sha256": "822c09fa63f8b529e89b6f0ed8fbe798047a60c497549fd377ee222f4135f6a2"
+    },
+    {
+      "location": "continente",
+      "year": "2023",
+      "label": "2023",
+      "validFrom": "2023-01-01",
+      "file": "taxas_continente_2023.csv",
+      "sha256": "8843274576a7deea2841c6ebc34d85542df3ba018cfebdd8af87c4961ca00d29"
+    },
+    {
+      "location": "madeira",
+      "year": "2026",
+      "label": "2026",
+      "validFrom": "2026-01-01",
+      "file": "taxas_madeira_2026.csv",
+      "sha256": "af5aca3699c84408394b1d1a1639592dbf58397f4d9aba75f0153dc1172a9d56"
+    },
+    {
+      "location": "acores",
+      "year": "2026",
+      "label": "2026",
+      "validFrom": "2026-01-01",
+      "file": "taxas_acores_2026.csv",
+      "sha256": "62246ea78399c271f8fd358f7a63093c2d7ca255edccff70f89998dd3565814d"
+    }
+  ]
+}

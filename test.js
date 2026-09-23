@@ -1,6 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { calculateSalary, calculateSalaryFromNet } = require('./index');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { calculateSalary, calculateSalaryFromNet, LOCATIONS, YEARS, TABLES } = require('./index');
 
 describe('calculateSalary', () => {
 
@@ -302,3 +305,51 @@ describe('calculateSalary', () => {
   });
 });
 
+describe('manifest', () => {
+  const dataDir = path.join(__dirname, 'data');
+  const listedFiles = TABLES.map((table) => table.file);
+
+  it('every listed file exists and its sha256 matches', () => {
+    for (const table of TABLES) {
+      const filePath = path.join(dataDir, table.file);
+      assert.ok(fs.existsSync(filePath), `${table.file} missing`);
+      const hash = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+      assert.equal(table.sha256, hash, `${table.file} sha256 mismatch`);
+    }
+  });
+
+  it('does not list catH tables', () => {
+    assert.ok(listedFiles.every((file) => !file.endsWith('_catH.csv')));
+  });
+
+  it('lists every non-catH table in data/', () => {
+    const tableFiles = fs.readdirSync(dataDir).filter((file) => /^taxas_.*\.csv$/.test(file) && !file.endsWith('_catH.csv'));
+    for (const file of tableFiles) {
+      assert.ok(listedFiles.includes(file), `${file} not in manifest`);
+    }
+  });
+
+  it('exports LOCATIONS in manifest order', () => {
+    assert.deepEqual(LOCATIONS, ['continente', 'madeira', 'acores']);
+  });
+
+  it('exports YEARS in manifest order', () => {
+    assert.deepEqual(YEARS, ['2026', '2025', '2024_03', '2024_02', '2024', '2023']);
+  });
+
+  it('exports TABLES with all fields', () => {
+    assert.equal(TABLES.length, 8);
+    for (const table of TABLES) {
+      for (const field of ['location', 'year', 'label', 'validFrom', 'file', 'sha256']) {
+        assert.ok(table[field], `${table.file} missing ${field}`);
+      }
+    }
+  });
+
+  it('does not load tables missing from the manifest', () => {
+    assert.throws(
+      () => calculateSalary({ location: 'acores', year: '2026_catH', salary: 1000 }),
+      { message: 'No data for acores in year 2026_catH' }
+    );
+  });
+});

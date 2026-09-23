@@ -1,13 +1,16 @@
 {
   "name": "salario-pt",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Portuguese salary calculator - calculates net salary from gross",
   "main": "index.js",
   "bin": {
     "salario-pt": "./cli.js"
   },
   "scripts": {
-    "test": "node --test test.js"
+    "test": "node --test test.js",
+    "manifest": "node scripts/manifest.js",
+    "manifest:check": "node scripts/manifest.js --check",
+    "prepublishOnly": "npm run manifest:check && npm test"
   },
   "keywords": [
     "salary",
