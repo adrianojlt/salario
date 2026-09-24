@@ -1,206 +1,116 @@
-const { getConstants } = require('./constants');
+const { MONTHLY_PAYMENTS_PER_YEAR } = require('./constants');
+const { createWithholdingCalculator } = require('./taxTable');
 
-const Situation = {
-  NotMarried: '0',
-  MarriedOneHolder: '1',
-  MarriedTwoHolders: '2'
-};
+const MONTHS_PER_YEAR = 12;
+const SUBSIDIES_PER_YEAR = MONTHLY_PAYMENTS_PER_YEAR - MONTHS_PER_YEAR;
+const DEFAULT_MEAL_WORKING_DAYS = 22;
 
-const SITUATION_MAP = {
-  'NotMarried': '0',
-  'MarriedOneHolder': '1',
-  'MarriedTwoHolders': '2'
-};
-
-function getType(situation, dependents, year) {
-  if (year === "2023") {
-    if (situation === Situation.NotMarried) {
-      if (dependents === 0) return "SOLCAS2";
-      return "SOLD";
-    }
-    if (situation === Situation.MarriedOneHolder) {
-      if (dependents === 0) return "CAS1";
-      return "CAS1D";
-    }
-    if (situation === Situation.MarriedTwoHolders) {
-      if (dependents === 0) return "SOLCAS2";
-      return "CAS2D";
-    }
-  }
-
-  if (year.startsWith("2024") || year.startsWith("2025") || year.startsWith("2026")) {
-    if (situation === Situation.NotMarried) {
-      if (dependents === 0) return "SOLCAS2";
-      return "SOLD";
-    }
-    if (situation === Situation.MarriedOneHolder) {
-      return "CAS1";
-    }
-    if (situation === Situation.MarriedTwoHolders) {
-      return "SOLCAS2";
-    }
-  }
+function roundCents(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function findTaxRow(grossSalary, type, csvJson) {
-  const inMaxRange = (x) => grossSalary < parseFloat(x.limite.replace(',', '.')) && x.sinal === 'max';
-  const inMinRange = (x) => grossSalary >= parseFloat(x.limite.replace(',', '.')) && x.sinal === 'min';
+// Art. 99.º-E CIRS: A retenção na fonte é arredondada para baixo, para o euro.
+function floorEuro(value) {
+  return Math.floor(value + 1e-9);
+}
 
-  const hasType = (t) => csvJson.some(x => x.tipo === t);
+// Apenas o valor que exceder o limite legal diário estará sujeito ao IRS (Receita Federal dos EUA) e à SS (Seguro Social).
+function computeMealAllowance({ dailyAmount, type, workingDays = DEFAULT_MEAL_WORKING_DAYS }, limits) {
+  const dailyLimit = type === 'card' ? limits.cardDailyLimit : limits.cashDailyLimit;
+  const totalMonthly = roundCents(dailyAmount * workingDays);
+  const taxableAmount = roundCents(Math.max(0, dailyAmount - dailyLimit) * workingDays);
+  return { totalMonthly, exemptAmount: roundCents(totalMonthly - taxableAmount), taxableAmount };
+}
 
-  let resolvedType = type;
-  if (!hasType(resolvedType)) {
-    if (resolvedType === 'SOLCAS2') resolvedType = 'SOLD';
-    else if (resolvedType === 'CAS2D') resolvedType = 'CAS1';
-  }
+// IRS Jovem: a taxa efectiva provém do rendimento total, mas só se aplica à
+// parte não isenta. O rendimento isento por pagamento está limitado ao teto anual/14.
+function createIrsCalculator(withholdingBeforeRounding, irsJovemBenefit) {
+  return (income) => {
+    const withholding = withholdingBeforeRounding(income);
+    const irsWithoutExemption = floorEuro(withholding);
 
-  const values = csvJson.filter(x => x.tipo === resolvedType && (inMaxRange(x) || inMinRange(x)));
+    if (!irsJovemBenefit || income === 0) {
+      return { irs: irsWithoutExemption, irsJovemDiscount: 0 };
+    }
 
-  if (!values[0]) return null;
-
-  const row = values[0];
-  return {
-    part: parseFloat(row.parcela_abater.replace(',', '.')),
-    percentage: parseFloat(row.maximo.replace(/%/g, '').replace(',', '.')) / 100,
-    dependentsPart: parseFloat(parseFloat(row.adicional.replace(',', '.')).toFixed(2)),
+    const exemptIncome = Math.min(
+      income * irsJovemBenefit.exemptionRate,
+      irsJovemBenefit.annualExemptCap / MONTHLY_PAYMENTS_PER_YEAR,
+    );
+    const irs = floorEuro((withholding / income) * (income - exemptIncome));
+    return { irs, irsJovemDiscount: irsWithoutExemption - irs };
   };
 }
 
-function computeIrs(grossSalary, taxRow, numDependents) {
-  const salaryWithTax = parseFloat((grossSalary * taxRow.percentage).toFixed(2));
-  const additionalPart = taxRow.dependentsPart * numDependents;
-  let irsDiscount = salaryWithTax - taxRow.part - additionalPart;
-  if (irsDiscount < 0) irsDiscount = 0;
-  return parseFloat(irsDiscount.toFixed(2));
-}
+function calculate({ grossSalary, situation, numDependents, constants, taxRows, mealAllowance, irsJovem, subsidies }) {
 
-function calculate(grossSalary, situation, numDependents, year, csvJson, location, options = {}) {
-  const constants = getConstants(year);
-  const internalSituation = SITUATION_MAP[situation] || situation;
-  const type = getType(internalSituation, numDependents, year);
+  const { employeeRate, employerRate } = constants.socialSecurity;
+  const irsJovemBenefit = irsJovem && constants.irsJovem.benefitYears[irsJovem.benefitYear - 1];
+  const computeIrs = createIrsCalculator(
+    createWithholdingCalculator(taxRows, situation, numDependents),
+    irsJovemBenefit,
+  );
 
-  const { mealAllowance, irsJovem, subsidies } = options;
+  const meal = mealAllowance && computeMealAllowance(mealAllowance, constants.mealAllowance);
+  const mealTotal = meal ? meal.totalMonthly : 0;
+  const mealTaxable = meal ? meal.taxableAmount : 0;
 
-  // Meal allowance: compute taxable excess
-  let mealTaxableExcess = 0;
-  let mealExemptAmount = 0;
-  let mealTotalMonthly = 0;
-  if (mealAllowance) {
-    const workingDays = mealAllowance.workingDays || 22;
-    const dailyLimit = mealAllowance.type === 'card'
-      ? constants.mealAllowance.cardDailyLimit
-      : constants.mealAllowance.cashDailyLimit;
+  // Christmas and holiday subsidies are withheld autonomously, never added to the monthly salary.
+  const subsidyIrs = computeIrs(grossSalary);
+  const subsidySs = roundCents(grossSalary * employeeRate);
+  const subsidy = {
+    gross: grossSalary,
+    net: roundCents(grossSalary - subsidyIrs.irs - subsidySs),
+    irs: subsidyIrs.irs,
+    ss: subsidySs,
+  };
 
-    mealTotalMonthly = parseFloat((mealAllowance.dailyAmount * workingDays).toFixed(2));
+  // com duodecimos, Todos os meses paga (e retém) também 2/12 dos subsídios.
+  const duodecimos = Boolean(subsidies && subsidies.duodecimos);
+  const duodecimoShare = duodecimos ? SUBSIDIES_PER_YEAR / MONTHS_PER_YEAR : 0;
 
-    if (mealAllowance.dailyAmount > dailyLimit) {
-      const taxableDaily = mealAllowance.dailyAmount - dailyLimit;
-      mealTaxableExcess = parseFloat((taxableDaily * workingDays).toFixed(2));
-      mealExemptAmount = parseFloat((dailyLimit * workingDays).toFixed(2));
-    } else {
-      mealExemptAmount = mealTotalMonthly;
-    }
-  }
+  const salaryTaxableIncome = grossSalary + mealTaxable;
+  const salaryIrs = computeIrs(salaryTaxableIncome);
 
-  // Duodecimos: adjust effective gross if subsidies are spread monthly
-  const duodecimos = subsidies && subsidies.duodecimos === true;
-  let effectiveGross = duodecimos ? parseFloat((grossSalary * 14 / 12).toFixed(2)) : grossSalary;
+  const irsDiscount = roundCents(salaryIrs.irs + subsidyIrs.irs * duodecimoShare);
+  const irsJovemDiscount = roundCents(salaryIrs.irsJovemDiscount + subsidyIrs.irsJovemDiscount * duodecimoShare);
+  const ssDiscount = roundCents((salaryTaxableIncome + grossSalary * duodecimoShare) * employeeRate);
+  const netSalary = roundCents(grossSalary * (1 + duodecimoShare) + mealTotal - irsDiscount - ssDiscount);
 
-  // Add meal taxable excess to effective gross for IRS/SS computation
-  const effectiveGrossForTax = effectiveGross + mealTaxableExcess;
+  const companyMonthlyCost = roundCents(
+    (grossSalary * MONTHLY_PAYMENTS_PER_YEAR / MONTHS_PER_YEAR) * (1 + employerRate)
+      + mealTotal
+      + mealTaxable * employerRate,
+  );
 
-  // IRS computation on effective gross
-  const taxRow = findTaxRow(effectiveGrossForTax, type, csvJson);
-  if (!taxRow) return null;
-
-  let irsDiscount = computeIrs(effectiveGrossForTax, taxRow, numDependents);
-
-  // IRS Jovem: apply exemption
-  let irsJovemDiscount = 0;
-  if (irsJovem) {
-    const exemptions = constants.irsJovem.exemptions;
-    const idx = irsJovem.benefitYear - 1;
-    const exemptionRate = exemptions[idx];
-    irsJovemDiscount = parseFloat((irsDiscount * exemptionRate).toFixed(2));
-    irsDiscount = parseFloat((irsDiscount - irsJovemDiscount).toFixed(2));
-  }
-
-  // SS computation on effective gross
-  const ssDiscount = parseFloat((effectiveGrossForTax * constants.ss.employeeRate).toFixed(2));
-
-  // Net salary
-  const netSalary = parseFloat((effectiveGrossForTax - irsDiscount - ssDiscount + mealExemptAmount).toFixed(2));
-
-  // Company cost (always based on base gross, not effective)
-  const companyMonthlyCost = parseFloat(((grossSalary * constants.tsu) * 14 / 12).toFixed(2));
-  const companyAnnualCost = parseFloat((companyMonthlyCost * 12).toFixed(2));
-
-  // Build result with original 6 fields first
   const result = {
     grossSalary,
     netSalary,
     ssDiscount,
     irsDiscount,
     companyMonthlyCost,
-    companyAnnualCost,
+    companyAnnualCost: roundCents(companyMonthlyCost * MONTHS_PER_YEAR),
   };
 
-  // IRS Jovem discount (always present when irsJovem option used)
   if (irsJovem) {
     result.irsJovemDiscount = irsJovemDiscount;
   }
 
-  // Meal allowance breakdown
-  if (mealAllowance) {
-    result.mealAllowance = {
-      totalMonthly: mealTotalMonthly,
-      exemptAmount: mealExemptAmount,
-      taxableAmount: mealTaxableExcess,
-    };
+  if (meal) {
+    result.mealAllowance = meal;
   }
 
-  // Subsidies and annual calculation
   if (subsidies) {
-    if (duodecimos) {
-      result.subsidies = {
-        christmas: { gross: 0, net: 0, irs: 0, ss: 0 },
-        holiday: { gross: 0, net: 0, irs: 0, ss: 0 },
-      };
-      result.annual = {
-        grossTotal: parseFloat((effectiveGross * 12).toFixed(2)),
-        netTotal: parseFloat((netSalary * 12).toFixed(2)),
-        irsTotal: parseFloat((irsDiscount * 12).toFixed(2)),
-        ssTotal: parseFloat((ssDiscount * 12).toFixed(2)),
-      };
-    } else {
-      // Compute subsidy IRS/SS independently (each = 1x base gross)
-      const subsidyTaxRow = findTaxRow(grossSalary, type, csvJson);
-      let subsidyIrs = 0;
-      let subsidySs = 0;
-      let subsidyNet = grossSalary;
-      if (subsidyTaxRow) {
-        subsidyIrs = computeIrs(grossSalary, subsidyTaxRow, numDependents);
-        if (irsJovem) {
-          const exemptions = constants.irsJovem.exemptions;
-          const idx = irsJovem.benefitYear - 1;
-          const jovemDiscount = parseFloat((subsidyIrs * exemptions[idx]).toFixed(2));
-          subsidyIrs = parseFloat((subsidyIrs - jovemDiscount).toFixed(2));
-        }
-        subsidySs = parseFloat((grossSalary * constants.ss.employeeRate).toFixed(2));
-        subsidyNet = parseFloat((grossSalary - subsidyIrs - subsidySs).toFixed(2));
-      }
+    const paidSeparately = duodecimos ? { gross: 0, net: 0, irs: 0, ss: 0 } : subsidy;
+    const separatePayments = duodecimos ? 0 : SUBSIDIES_PER_YEAR;
 
-      result.subsidies = {
-        christmas: { gross: grossSalary, net: subsidyNet, irs: subsidyIrs, ss: subsidySs },
-        holiday: { gross: grossSalary, net: subsidyNet, irs: subsidyIrs, ss: subsidySs },
-      };
-      result.annual = {
-        grossTotal: parseFloat((grossSalary * 14).toFixed(2)),
-        netTotal: parseFloat(((netSalary * 12) + (subsidyNet * 2)).toFixed(2)),
-        irsTotal: parseFloat(((irsDiscount * 12) + (subsidyIrs * 2)).toFixed(2)),
-        ssTotal: parseFloat(((ssDiscount * 12) + (subsidySs * 2)).toFixed(2)),
-      };
-    }
+    result.subsidies = { christmas: { ...paidSeparately }, holiday: { ...paidSeparately } };
+    result.annual = {
+      grossTotal: roundCents(grossSalary * MONTHLY_PAYMENTS_PER_YEAR),
+      netTotal: roundCents(netSalary * MONTHS_PER_YEAR + subsidy.net * separatePayments),
+      irsTotal: roundCents(irsDiscount * MONTHS_PER_YEAR + subsidy.irs * separatePayments),
+      ssTotal: roundCents(ssDiscount * MONTHS_PER_YEAR + subsidy.ss * separatePayments),
+    };
   }
 
   return result;

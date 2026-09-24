@@ -18,7 +18,7 @@ Only salary is required. Defaults: `NotMarried`, `0` dependents, `2026`, `contin
 
 ```bash
 salario-pt 2000
-# Gross: 2000€ | Net: 1478.66€ | IRS: 301.34€ | SS: 220€
+# Gross: 2000€ | Net: 1479€ | IRS: 301€ | SS: 220€
 # Company Monthly Cost: 2887.5€
 # Company Annual Cost: 34650€
 
@@ -74,9 +74,9 @@ const result = calculateSalary({
 /*
   {
     grossSalary: 2000,
-    netSalary: 1478.66,
+    netSalary: 1479,
     ssDiscount: 220,
-    irsDiscount: 301.34,
+    irsDiscount: 301,
     companyMonthlyCost: 2887.5,
     companyAnnualCost: 34650
   }
@@ -106,7 +106,7 @@ mealAllowance: {
 }
 ```
 
-The portion up to the legal daily limit (2025/2026: 10.20€ card, 6.01€ cash) is exempt from IRS and SS. Any excess is taxed.
+The portion up to the legal daily limit is exempt from IRS and SS (2026: 6.15€ cash, 10.455€ card; 2025: 6.00€ cash, 10.20€ card). Only the excess is taxed: it is added to the IRS/SS base and to the company cost (with employer SS).
 
 When provided, the result includes a `mealAllowance` field:
 ```js
@@ -121,7 +121,7 @@ irsJovem: {
 }
 ```
 
-Partial IRS exemption for young workers in their first 10 years of employment after completing studies. Exemption rates (2025/2026): 100%, 75%, 50%, 50%, 50%, 25%, 25%, 25%, 25%, 25%.
+Partial IRS exemption for young workers in their first 10 years of employment after completing studies. Exemption rates (2025/2026): 100% in year 1, 75% in years 2-4, 50% in years 5-7, 25% in years 8-10, with exempt income capped at 55 x IAS per year (55 x IAS / 14 per payment). The withholding rate is computed on the full income and applied only to the non-exempt part.
 
 When provided, the result includes `irsJovemDiscount`.
 
@@ -133,7 +133,7 @@ subsidies: {
 }
 ```
 
-Controls how Christmas (13th month) and Holiday (14th month) subsidies are calculated. When `duodecimos: false`, they are computed separately and the monthly `netSalary` is unchanged. When `duodecimos: true`, the monthly gross becomes `salary * 14/12` and there are no separate payments.
+Controls how Christmas (13th month) and Holiday (14th month) subsidies are calculated. When `duodecimos: false`, they are computed separately and the monthly `netSalary` is unchanged. Subsidy withholding is always computed autonomously on the subsidy amount, never added to the monthly salary. When `duodecimos: true`, each month pays 2/12 of the subsidies and withholds 2/12 of their autonomous IRS; there are no separate payments.
 
 When provided, the result includes:
 ```js
@@ -154,7 +154,7 @@ annual: {
 ```js
 // IRS Jovem - 1st benefit year (100% exemption)
 calculateSalary({ salary: 2000, year: '2025', irsJovem: { benefitYear: 1 } });
-// irsDiscount: 0, irsJovemDiscount: 326.01
+// irsDiscount: 0, irsJovemDiscount: 326
 
 // Meal allowance - card at 7.63€/day (below 10.20€ limit, fully exempt)
 calculateSalary({ salary: 2000, year: '2025', mealAllowance: { dailyAmount: 7.63, type: 'card' } });
@@ -162,7 +162,7 @@ calculateSalary({ salary: 2000, year: '2025', mealAllowance: { dailyAmount: 7.63
 
 // Subsidies with annual breakdown
 calculateSalary({ salary: 2000, year: '2025', subsidies: { duodecimos: false } });
-// annual: { grossTotal: 28000, netTotal: 20355.86, irsTotal: 4564.14, ssTotal: 3080 }
+// annual: { grossTotal: 28000, netTotal: 20356, irsTotal: 4564, ssTotal: 3080 }
 ```
 
 ### calculateSalaryFromNet(options)
@@ -177,7 +177,7 @@ const result = calculateSalaryFromNet({
   location: 'continente'
 });
 
-// result.grossSalary => ~2036.88
+// result.grossSalary => ~2035.95
 // result.netSalary   => ~1500
 ```
 
@@ -278,10 +278,11 @@ A published version cannot be republished. If something is wrong, fix it and rel
 ## How it works
 
 1. Loads the CSV tax tables listed in `data/manifest.json` (parsed with papaparse, cached after first load)
-2. Determines the tax type based on situation, dependents, and year
-3. Finds the matching tax bracket for the gross salary
+2. Determines the table based on situation and dependents
+3. Finds the bracket for the monthly taxable income R (limits are inclusive)
 4. Calculates:
-   - **IRS discount** = (gross x tax rate) - parcela a abater - (adicional x dependents), minimum 0
-   - **SS discount** = gross x 11%
-   - **Net salary** = gross - IRS discount - SS discount
+   - **IRS discount** = R x rate - parcela a abater(R) - (adicional x dependents), minimum 0, rounded down to the euro (art. 99.º-E CIRS). In the lower brackets the parcela a abater is a formula of R. With 3 or more dependents the rate is reduced by 1 percentage point.
+   - **SS discount** = R x 11%
+   - **Net salary** = gross - IRS discount - SS discount (+ meal allowance)
+   - **Company monthly cost** = gross x 14/12 x 123.75% (+ meal allowance and employer SS on its taxable excess)
 5. Optional features (IRS Jovem, meal allowance, subsidies) are applied on top without affecting the base calculation when omitted

@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 
-const { calculateSalary, calculateSalaryFromNet } = require('./index');
+const { calculateSalary, calculateSalaryFromNet, YEARS } = require('./index');
 
 const args = process.argv.slice(2);
 
 // Boolean flags that don't take a value
 const BOOLEAN_FLAGS = new Set(['duodecimos', 'subsidies', 'reverse', 'help']);
 
-// Parse named flags from args
 function parseArgs(args) {
+
   const positional = [];
   const flags = {};
 
   for (let i = 0; i < args.length; i++) {
+
     if (args[i].startsWith('--')) {
+
       const key = args[i].slice(2);
+
       if (BOOLEAN_FLAGS.has(key)) {
         flags[key] = true;
       } else {
@@ -37,7 +40,7 @@ if (positional.length < 1 && !flags.help) {
   console.log('  salary          Gross monthly salary in euros');
   console.log('  situation       NotMarried (default), MarriedOneHolder, MarriedTwoHolders');
   console.log('  numDependents   Number of dependents, 0-5+ (default: 0)');
-  console.log('  year            2026 (default), 2024_03, 2024_02, 2024, 2023');
+  console.log(`  year            ${YEARS.join(', ')} (default: 2026)`);
   console.log('  location        continente (default), madeira, acores');
   console.log('');
   console.log('Options:');
@@ -90,16 +93,23 @@ if (flags['subsidies'] || flags['duodecimos']) {
 const isReverse = !!flags['reverse'];
 
 let result;
-if (isReverse) {
-  result = calculateSalaryFromNet({ netSalary: salary, situation, numDependents, year, location, ...opts });
-} else {
-  result = calculateSalary(opts);
+try {
+  if (isReverse) {
+    const { salary: netSalary, ...options } = opts;
+    result = calculateSalaryFromNet({ ...options, netSalary });
+  } else {
+    result = calculateSalary(opts);
+  }
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
 }
 
 // Output
 if (isReverse) {
   console.log(`Target Net: ${salary}€ | Required Gross: ${result.grossSalary}€`);
 }
+
 console.log(`Gross: ${result.grossSalary}€ | Net: ${result.netSalary}€ | IRS: ${result.irsDiscount}€ | SS: ${result.ssDiscount}€`);
 console.log(`Company Monthly Cost: ${result.companyMonthlyCost}€`);
 console.log(`Company Annual Cost: ${result.companyAnnualCost}€`);

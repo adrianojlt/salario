@@ -7,6 +7,53 @@ const { calculateSalary, calculateSalaryFromNet, LOCATIONS, YEARS, TABLES } = re
 
 describe('calculateSalary', () => {
 
+  describe('reference examples, continente 2026', () => {
+    it('1500, table I: IRS 168, SS 165, net 1167', () => {
+      const result = calculateSalary({ salary: 1500 });
+      assert.equal(result.irsDiscount, 168);
+      assert.equal(result.ssDiscount, 165);
+      assert.equal(result.netSalary, 1167);
+    });
+
+    it('1000: deduction is a formula of R, not a fixed amount', () => {
+      // 0.125 × 1000 − 0.125 × 2.6 × (1273.85 − 1000) = 35.99875
+      const result = calculateSalary({ salary: 1000 });
+      assert.equal(result.irsDiscount, 35);
+    });
+
+    it('bracket limits are inclusive', () => {
+      // 1042 still uses the "até 1042" row: 130.25 − 75.35125 = 54.89875
+      const result = calculateSalary({ salary: 1042 });
+      assert.equal(result.irsDiscount, 54);
+    });
+
+    it('IRS withholding is rounded down to the euro', () => {
+      // 2000: 0.311 × 2000 − 320.66 = 301.34
+      const result = calculateSalary({ salary: 2000 });
+      assert.equal(result.irsDiscount, 301);
+    });
+
+    it('3 or more dependents reduce the marginal rate by 1 percentage point', () => {
+      // 0.301 × 2000 − 320.66 − 3 × 34.29 = 178.47
+      const result = calculateSalary({ salary: 2000, numDependents: 3 });
+      assert.equal(result.irsDiscount, 178);
+    });
+
+    it('meal card within the limit is exempt and added to net', () => {
+      const result = calculateSalary({ salary: 1500, mealAllowance: { dailyAmount: 10, type: 'card' } });
+      assert.equal(result.mealAllowance.taxableAmount, 0);
+      assert.equal(result.irsDiscount, 168);
+      assert.equal(result.netSalary, 1387);
+    });
+
+    it('meal cash above 6.15 is taxed on the excess only', () => {
+      const result = calculateSalary({ salary: 1500, mealAllowance: { dailyAmount: 8, type: 'cash' } });
+      assert.equal(result.mealAllowance.taxableAmount, 40.7);
+      assert.equal(result.mealAllowance.exemptAmount, 135.3);
+      assert.equal(result.ssDiscount, 169.48);
+    });
+  });
+
   describe('NotMarried, 0 dependents, 2025', () => {
     it('low salary (800)', () => {
       const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2025', salary: 800 });
@@ -18,46 +65,47 @@ describe('calculateSalary', () => {
 
     it('mid salary (1000)', () => {
       const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2025', salary: 1000 });
-      assert.equal(result.netSalary, 741.5);
+      assert.equal(result.irsDiscount, 58);
+      assert.equal(result.netSalary, 832);
     });
 
     it('mid salary (2000)', () => {
       const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2025', salary: 2000 });
       assert.equal(result.grossSalary, 2000);
-      assert.equal(result.netSalary, 1453.99);
+      assert.equal(result.netSalary, 1454);
       assert.equal(result.ssDiscount, 220);
-      assert.equal(result.irsDiscount, 326.01);
+      assert.equal(result.irsDiscount, 326);
     });
 
     it('high salary (5000)', () => {
       const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2025', salary: 5000 });
-      assert.equal(result.netSalary, 2955.53);
+      assert.equal(result.netSalary, 2956);
     });
   });
 
   describe('MarriedOneHolder with dependents, 2025', () => {
     it('2 dependents, salary 2000', () => {
       const result = calculateSalary({ situation: 'MarriedOneHolder', numDependents: 2, year: '2025', salary: 2000 });
-      assert.equal(result.netSalary, 1680.55);
+      assert.equal(result.netSalary, 1681);
     });
   });
 
   describe('MarriedTwoHolders, 2025', () => {
     it('0 dependents, salary 2000', () => {
       const result = calculateSalary({ situation: 'MarriedTwoHolders', numDependents: 0, year: '2025', salary: 2000 });
-      assert.equal(result.netSalary, 1453.99);
+      assert.equal(result.netSalary, 1454);
     });
   });
 
   describe('different years', () => {
     it('2024', () => {
       const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2024', salary: 2000 });
-      assert.equal(result.netSalary, 1430.8);
+      assert.equal(result.netSalary, 1431);
     });
 
     it('2023', () => {
       const result = calculateSalary({ situation: 'NotMarried', numDependents: 0, year: '2023', salary: 2000 });
-      assert.equal(result.netSalary, 1374.48);
+      assert.equal(result.netSalary, 1375);
     });
   });
 
@@ -96,6 +144,18 @@ describe('calculateSalary', () => {
         { message: /No data for madeira in year 2025/ }
       );
     });
+
+    it('throws on invalid situation', () => {
+      assert.throws(
+        () => calculateSalary({ situation: 'Divorced', salary: 2000 }),
+        { message: /Unknown situation: Divorced/ }
+      );
+    });
+
+    it('throws on invalid salary', () => {
+      assert.throws(() => calculateSalary({ salary: -1 }), { message: /salary must be a non-negative number/ });
+      assert.throws(() => calculateSalary({ salary: NaN }), { message: /salary must be a non-negative number/ });
+    });
   });
 
   describe('different locations', () => {
@@ -122,19 +182,33 @@ describe('calculateSalary', () => {
     it('benefitYear 1 gives 100% IRS exemption', () => {
       const result = calculateSalary({ salary: 2000, year: '2025', irsJovem: { benefitYear: 1 } });
       assert.equal(result.irsDiscount, 0);
-      assert.equal(result.irsJovemDiscount, 326.01);
+      assert.equal(result.irsJovemDiscount, 326);
     });
 
     it('benefitYear 2 gives 75% IRS exemption', () => {
+      // effective rate 326.01 / 2000 applied to the non-exempt 500
       const result = calculateSalary({ salary: 2000, year: '2025', irsJovem: { benefitYear: 2 } });
-      assert.equal(result.irsJovemDiscount, 244.51);
-      assert.equal(result.irsDiscount, 81.5);
+      assert.equal(result.irsDiscount, 81);
+      assert.equal(result.irsJovemDiscount, 245);
     });
 
-    it('benefitYear 6 gives 25% IRS exemption', () => {
-      const result = calculateSalary({ salary: 2000, year: '2025', irsJovem: { benefitYear: 6 } });
-      assert.equal(result.irsJovemDiscount, 81.5);
-      assert.equal(result.irsDiscount, 244.51);
+    it('benefitYear 5 gives 50% IRS exemption', () => {
+      const result = calculateSalary({ salary: 2000, year: '2025', irsJovem: { benefitYear: 5 } });
+      assert.equal(result.irsDiscount, 163);
+      assert.equal(result.irsJovemDiscount, 163);
+    });
+
+    it('benefitYear 8 gives 25% IRS exemption', () => {
+      const result = calculateSalary({ salary: 2000, year: '2025', irsJovem: { benefitYear: 8 } });
+      assert.equal(result.irsDiscount, 244);
+      assert.equal(result.irsJovemDiscount, 82);
+    });
+
+    it('exempt income is capped at 55 × IAS / 14 per payment', () => {
+      // 2026 cap: 55 × 537.13 / 14 = 2110.21; taxable 889.79 at the effective rate of 3000
+      const result = calculateSalary({ salary: 3000, year: '2026', irsJovem: { benefitYear: 1 } });
+      assert.equal(result.irsDiscount, 196);
+      assert.equal(result.irsJovemDiscount, 467);
     });
 
     it('low salary where IRS is already 0', () => {
@@ -186,8 +260,15 @@ describe('calculateSalary', () => {
 
     it('cash above limit has taxable excess', () => {
       const result = calculateSalary({ salary: 2000, year: '2025', mealAllowance: { dailyAmount: 8.00, type: 'cash', workingDays: 22 } });
-      // excess = (8 - 6.01) * 22 = 1.99 * 22 = 43.78
-      assert.equal(result.mealAllowance.taxableAmount, 43.78);
+      // excess = (8 - 6.00) * 22 = 2.00 * 22 = 44
+      assert.equal(result.mealAllowance.taxableAmount, 44);
+    });
+
+    it('taxable excess is included in company cost with employer SS', () => {
+      const base = calculateSalary({ salary: 2000, year: '2025' });
+      const result = calculateSalary({ salary: 2000, year: '2025', mealAllowance: { dailyAmount: 8.00, type: 'cash', workingDays: 22 } });
+      // 176 paid + 44 × 23.75% employer SS
+      assert.equal(result.companyMonthlyCost, parseFloat((base.companyMonthlyCost + 176 + 10.45).toFixed(2)));
     });
 
     it('defaults to 22 working days', () => {
@@ -219,26 +300,36 @@ describe('calculateSalary', () => {
       assert.equal(result.irsDiscount, base.irsDiscount);
       assert.equal(result.ssDiscount, base.ssDiscount);
 
-      // Subsidies computed
+      // Subsidies computed autonomously
       assert.equal(result.subsidies.christmas.gross, 2000);
-      assert.ok(result.subsidies.christmas.net > 0);
-      assert.ok(result.subsidies.christmas.irs >= 0);
+      assert.equal(result.subsidies.christmas.irs, 326);
       assert.equal(result.subsidies.christmas.ss, 220);
+      assert.equal(result.subsidies.christmas.net, 1454);
 
       // Annual totals
       assert.equal(result.annual.grossTotal, 28000);
-      assert.ok(result.annual.netTotal > 0);
+      assert.equal(result.annual.netTotal, 1454 * 14);
     });
 
-    it('duodecimos mode: higher monthly gross, no separate subsidies', () => {
+    it('subsidy IRS ignores the taxable meal excess of the monthly salary', () => {
+      const result = calculateSalary({
+        salary: 2000,
+        year: '2025',
+        mealAllowance: { dailyAmount: 12, type: 'card' },
+        subsidies: { duodecimos: false },
+      });
+      assert.equal(result.subsidies.christmas.irs, 326);
+    });
+
+    it('duodecimos mode: 2/12 of the autonomous subsidy withholding each month', () => {
       const result = calculateSalary({ salary: 2000, year: '2025', subsidies: { duodecimos: true } });
 
-      // Effective gross = 2000 * 14/12 = 2333.33
-      assert.ok(result.netSalary > 0);
+      // 326 + 326 × 2 / 12, not the withholding of 2000 × 14 / 12 as a single salary
+      assert.equal(result.irsDiscount, 380.33);
+      assert.equal(result.ssDiscount, 256.67);
       assert.equal(result.subsidies.christmas.gross, 0);
       assert.equal(result.subsidies.holiday.gross, 0);
-      // 2000 * 14/12 = 2333.33, * 12 = 27999.96 (rounding)
-      assert.equal(result.annual.grossTotal, 27999.96);
+      assert.equal(result.annual.grossTotal, 28000);
     });
 
     it('without subsidies, result has no subsidies or annual fields', () => {
@@ -247,44 +338,30 @@ describe('calculateSalary', () => {
       assert.equal(result.annual, undefined);
     });
 
-    it('annual net totals are similar between modes', () => {
+    it('annual net totals match between modes', () => {
       const separate = calculateSalary({ salary: 2000, year: '2025', subsidies: { duodecimos: false } });
       const duo = calculateSalary({ salary: 2000, year: '2025', subsidies: { duodecimos: true } });
 
-      // They should be in the same ballpark (within 5% of each other)
-      const diff = Math.abs(separate.annual.netTotal - duo.annual.netTotal);
-      const avg = (separate.annual.netTotal + duo.annual.netTotal) / 2;
-      assert.ok(diff / avg < 0.05, `Annual net totals too different: separate=${separate.annual.netTotal}, duo=${duo.annual.netTotal}`);
+      assert.ok(Math.abs(separate.annual.netTotal - duo.annual.netTotal) < 0.1,
+        `Annual net totals differ: separate=${separate.annual.netTotal}, duo=${duo.annual.netTotal}`);
     });
   });
 
   describe('Reverse Calculation (Net to Gross)', () => {
-    it('reverses known gross->net pair', () => {
-      const result = calculateSalaryFromNet({ netSalary: 1453.99, year: '2025' });
-      assert.ok(Math.abs(result.grossSalary - 2000) < 1, `Expected gross ~2000, got ${result.grossSalary}`);
-    });
+    const assertReverses = (options) => {
+      const forward = calculateSalary(options);
+      const { salary, ...rest } = options;
+      const reverse = calculateSalaryFromNet({ ...rest, netSalary: forward.netSalary });
+      assert.ok(Math.abs(reverse.netSalary - forward.netSalary) <= 0.01, `Expected net ${forward.netSalary}, got ${reverse.netSalary}`);
+      // Rounding IRS down to the euro makes net a sawtooth, so several gross values can give the same net.
+      assert.ok(Math.abs(reverse.grossSalary - salary) < 2, `Expected gross ~${salary}, got ${reverse.grossSalary}`);
+    };
 
-    it('reverses low salary', () => {
-      const result = calculateSalaryFromNet({ netSalary: 712, year: '2025' });
-      assert.ok(Math.abs(result.grossSalary - 800) < 1, `Expected gross ~800, got ${result.grossSalary}`);
-    });
-
-    it('reverses high salary', () => {
-      const result = calculateSalaryFromNet({ netSalary: 2955.53, year: '2025' });
-      assert.ok(Math.abs(result.grossSalary - 5000) < 1, `Expected gross ~5000, got ${result.grossSalary}`);
-    });
-
-    it('reverses with IRS Jovem', () => {
-      const forward = calculateSalary({ salary: 2000, year: '2025', irsJovem: { benefitYear: 2 } });
-      const reverse = calculateSalaryFromNet({ netSalary: forward.netSalary, year: '2025', irsJovem: { benefitYear: 2 } });
-      assert.ok(Math.abs(reverse.grossSalary - 2000) < 1, `Expected gross ~2000, got ${reverse.grossSalary}`);
-    });
-
-    it('reverses with meal allowance', () => {
-      const forward = calculateSalary({ salary: 2000, year: '2025', mealAllowance: { dailyAmount: 8, type: 'card' } });
-      const reverse = calculateSalaryFromNet({ netSalary: forward.netSalary, year: '2025', mealAllowance: { dailyAmount: 8, type: 'card' } });
-      assert.ok(Math.abs(reverse.grossSalary - 2000) < 1, `Expected gross ~2000, got ${reverse.grossSalary}`);
-    });
+    it('reverses mid salary', () => assertReverses({ salary: 2000, year: '2025' }));
+    it('reverses low salary', () => assertReverses({ salary: 800, year: '2025' }));
+    it('reverses high salary', () => assertReverses({ salary: 5000, year: '2025' }));
+    it('reverses with IRS Jovem', () => assertReverses({ salary: 2000, year: '2025', irsJovem: { benefitYear: 2 } }));
+    it('reverses with meal allowance', () => assertReverses({ salary: 2000, year: '2025', mealAllowance: { dailyAmount: 8, type: 'card' } }));
   });
 
   describe('Combined features', () => {

@@ -1,79 +1,116 @@
 const { loadTables, LOCATIONS, YEARS, TABLES } = require('./src/tables');
+const { getConstants } = require('./src/constants');
 const { calculate } = require('./src/calculate');
 
-function calculateSalary({ situation = 'NotMarried', numDependents = 0, year = '2026', salary, location = 'continente', mealAllowance, irsJovem, subsidies }) {
+const SITUATIONS = ['NotMarried', 'MarriedOneHolder', 'MarriedTwoHolders'];
+const MEAL_ALLOWANCE_TYPES = ['card', 'cash'];
+
+const isNonNegativeNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+const isNonNegativeInteger = (value) => Number.isInteger(value) && value >= 0;
+
+function validateInput({ salary, situation, numDependents, mealAllowance, irsJovem, subsidies }, constants) {
+
+  if (!isNonNegativeNumber(salary)) {
+    throw new Error('salary must be a non-negative number');
+  }
+
+  if (!SITUATIONS.includes(situation)) {
+    throw new Error(`Unknown situation: ${situation}. Available: ${SITUATIONS.join(', ')}`);
+  }
+
+  if (!isNonNegativeInteger(numDependents)) {
+    throw new Error('numDependents must be a non-negative integer');
+  }
+
+  if (mealAllowance) {
+
+    if (!MEAL_ALLOWANCE_TYPES.includes(mealAllowance.type)) {
+      throw new Error(`Invalid meal allowance type: ${mealAllowance.type}. Must be 'card' or 'cash'`);
+    }
+
+    if (!isNonNegativeNumber(mealAllowance.dailyAmount)) {
+      throw new Error('Meal allowance dailyAmount must be a positive number');
+    }
+
+    if (mealAllowance.workingDays !== undefined && !isNonNegativeInteger(mealAllowance.workingDays)) {
+      throw new Error('Meal allowance workingDays must be a non-negative integer');
+    }
+  }
+
+  if (irsJovem) {
+
+    const maxBenefitYear = constants.irsJovem.benefitYears.length;
+    const { benefitYear } = irsJovem;
+
+    if (!Number.isInteger(benefitYear) || benefitYear < 1 || benefitYear > maxBenefitYear) {
+      throw new Error(`IRS Jovem benefitYear must be between 1 and ${maxBenefitYear}`);
+    }
+  }
+
+  if (subsidies && subsidies.duodecimos !== undefined && typeof subsidies.duodecimos !== 'boolean') {
+    throw new Error('subsidies.duodecimos must be a boolean');
+  }
+}
+
+function calculateSalary({
+  salary,
+  situation = 'NotMarried',
+  numDependents = 0,
+  year = '2026',
+  location = 'continente',
+  mealAllowance,
+  irsJovem,
+  subsidies,
+}) {
 
   if (!LOCATIONS.includes(location)) {
     throw new Error(`Unknown location: ${location}. Available: ${LOCATIONS.join(', ')}`);
   }
 
-  const csvJson = loadTables(location, year);
-
-  if (!csvJson) {
+  const taxRows = loadTables(location, year);
+  if (!taxRows) {
     throw new Error(`No data for ${location} in year ${year}`);
   }
 
-  // Validate mealAllowance
-  if (mealAllowance) {
-    if (!['card', 'cash'].includes(mealAllowance.type)) {
-      throw new Error(`Invalid meal allowance type: ${mealAllowance.type}. Must be 'card' or 'cash'`);
-    }
-    if (typeof mealAllowance.dailyAmount !== 'number' || mealAllowance.dailyAmount < 0) {
-      throw new Error('Meal allowance dailyAmount must be a positive number');
-    }
-  }
+  const constants = getConstants(year);
+  validateInput({ salary, situation, numDependents, mealAllowance, irsJovem, subsidies }, constants);
 
-  // Validate irsJovem
-  if (irsJovem) {
-    if (typeof irsJovem.benefitYear !== 'number' || irsJovem.benefitYear < 1 || irsJovem.benefitYear > 10) {
-      throw new Error('IRS Jovem benefitYear must be between 1 and 10');
-    }
-  }
-
-  // Validate subsidies
-  if (subsidies && typeof subsidies.duodecimos !== 'undefined' && typeof subsidies.duodecimos !== 'boolean') {
-    throw new Error('subsidies.duodecimos must be a boolean');
-  }
-
-  const options = {};
-  if (mealAllowance) options.mealAllowance = mealAllowance;
-  if (irsJovem) options.irsJovem = irsJovem;
-  if (subsidies) options.subsidies = subsidies;
-
-  const result = calculate(salary, situation, numDependents, year, csvJson, location, options);
-
-  if (result === null) {
-    throw new Error(`Could not calculate salary for the given parameters`);
-  }
-
-  return result;
+  return calculate({
+    grossSalary: salary,
+    situation,
+    numDependents,
+    constants,
+    taxRows,
+    mealAllowance,
+    irsJovem,
+    subsidies,
+  });
 }
 
-function calculateSalaryFromNet({ netSalary: targetNet, situation = 'NotMarried', numDependents = 0, year = '2026', location = 'continente', mealAllowance, irsJovem, subsidies }) {
-  let low = targetNet;
-  let high = targetNet * 2.5;
+// O valor liquido é monotonico em relação ao valor bruto, portanto uma busca por bisseção permite encontrar o valor bruto para um valor líquido.
+function calculateSalaryFromNet({ netSalary: targetNet, ...options }) {
 
-  const opts = { situation, numDependents, year, location };
-  if (mealAllowance) opts.mealAllowance = mealAllowance;
-  if (irsJovem) opts.irsJovem = irsJovem;
-  if (subsidies) opts.subsidies = subsidies;
+  if (!isNonNegativeNumber(targetNet)) {
+    throw new Error('netSalary must be a non-negative number');
+  }
 
-  for (let i = 0; i < 100; i++) {
-    const mid = parseFloat(((low + high) / 2).toFixed(2));
-    const result = calculateSalary({ ...opts, salary: mid });
+  const netFor = (salary) => calculateSalary({ ...options, salary });
 
-    if (Math.abs(result.netSalary - targetNet) < 0.01) {
-      return result;
-    }
+  let low = 0;
+  let high = Math.max(targetNet * 3, 1);
 
-    if (result.netSalary < targetNet) {
+  for (let i = 0; i < 100 && high - low >= 0.01; i++) {
+
+    const mid = (low + high) / 2;
+
+    if (netFor(mid).netSalary < targetNet) {
       low = mid;
     } else {
       high = mid;
     }
   }
 
-  return calculateSalary({ ...opts, salary: parseFloat(((low + high) / 2).toFixed(2)) });
+  return netFor(Math.round(high * 100) / 100);
 }
 
 module.exports = { calculateSalary, calculateSalaryFromNet, LOCATIONS, YEARS, TABLES };

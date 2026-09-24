@@ -1,8 +1,0 @@
-node_modules/
-temp/
-.git/
-.gitignore
-.DS_Store
-*.tgz
-test.js
-data/*_catH.csv
